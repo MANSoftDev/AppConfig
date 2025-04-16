@@ -1,0 +1,104 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using Microsoft.Extensions.Configuration.AzureAppConfiguration
+@using Microsoft.FeatureManagement;
+
+@inject IConfiguration _config
+@inject IFeatureManager _featureManager
+
+<PageTitle>Home</PageTitle>
+
+<p>From App Configuration:<b>@configValue</b></p>
+<p>From Key Vault via App Configuration:<b>@secretValue</b></p>
+
+<p>Next refresh in: <b>@countdownSeconds</b> seconds</p>
+<button class="btn btn-secondary" @onclick="ToggleAutoRefresh">@(isAutoRefreshing ? "Stop Auto-Refresh" : "Start Auto-Refresh")</button>
+
+@code {
+   private string configValue = string.Empty;
+   private string secretValue = string.Empty;
+   private System.Timers.Timer? autoRefreshTimer;
+   private System.Timers.Timer? countdownTimer;
+   private bool isAutoRefreshing = false;
+   private int countdownSeconds = 5;
+
+   protected override async Task OnInitializedAsync()
+   {
+       await LoadValues();
+   }
+
+   private async Task LoadValues()
+   {
+       configValue = _config[Constants.KEY1] ?? "No Value Found";
+
+       if (await _featureManager.IsEnabledAsync(Constants.FEATURE1))
+       {
+           secretValue = _config[Constants.SECRET1] ?? "No Value Found";
+       }
+       else
+       {
+           secretValue = "Feature is disabled";
+       }
+   }
+
+   private async Task Refresh()
+   {
+       await AppConfig.Extension.AppConfiguration.RefreshAsync();
+       await LoadValues();
+       ResetCountdown();
+   }
+
+   private void ToggleAutoRefresh()
+   {
+       if (isAutoRefreshing)
+       {
+           // Stop the timers
+           autoRefreshTimer?.Stop();
+           autoRefreshTimer?.Dispose();
+           autoRefreshTimer = null;
+
+           countdownTimer?.Stop();
+           countdownTimer?.Dispose();
+           countdownTimer = null;
+
+           isAutoRefreshing = false;
+       }
+       else
+       {
+           // Start the auto-refresh timer
+           autoRefreshTimer = new System.Timers.Timer(5000); // 5 seconds
+           autoRefreshTimer.Elapsed += async (sender, args) =>
+           {
+               await InvokeAsync(Refresh); // Ensure UI updates are invoked on the correct thread
+           };
+           autoRefreshTimer.AutoReset = true;
+           autoRefreshTimer.Start();
+
+           // Start the countdown timer
+           StartCountdown();
+
+           isAutoRefreshing = true;
+       }
+   }
+
+   private void StartCountdown()
+   {
+       countdownSeconds = 5; // Reset countdown
+       countdownTimer = new System.Timers.Timer(1000); // 1 second
+       countdownTimer.Elapsed += (sender, args) =>
+       {
+           if (countdownSeconds > 0)
+           {
+               countdownSeconds--;
+               InvokeAsync(StateHasChanged); // Update UI
+           }
+       };
+       countdownTimer.AutoReset = true;
+       countdownTimer.Start();
+   }
+
+   private void ResetCountdown()
+   {
+       countdownSeconds = 5; // Reset countdown
+   }
+}
