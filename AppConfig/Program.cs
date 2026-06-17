@@ -15,6 +15,8 @@ builder.AddAzureAppConfiguration(
         Constants.LABEL_FILTER_DEV
     );
 
+//builder.UseMiddleware<AzureAppConfigurationRefreshMiddleware>();   
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
